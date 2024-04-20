@@ -1,3 +1,11 @@
+#!/usr/bin/env python
+# -*- encoding: utf-8 -*-
+'''
+@Description:       :
+@Date     :2021/12/22 21:03:35
+@Author      :Sanqiu
+@version      :1.0
+'''
 import torch
 import os
 from torch._C import FunctionSchema
@@ -8,7 +16,7 @@ from itertools import islice
 import pdb
 import json
 import nltk
-import random
+from random import shuffle
 class ACEExample(object):
     def __init__(self, context, labels,com,com_num,choice) -> None:
         self.context = context
@@ -58,7 +66,14 @@ class ACEProcessor():
                 assert len(context.split(" ")) == len(labels)
                 example = ACEExample(context, labels,com,com_num,choice)
                 examples.append(example)
-
+            # if 'train' in file_name:
+            #     shuffle(examples)
+            #     exa_len=len(examples)
+            #     few_len=int(exa_len*0.1)
+            #     print('\nmmm',few_len,file_name,exa_len)
+            #     examples=examples[:few_len]
+            #     print('\nqqqmmm',len(examples))
+                
         return examples
 
     def convert_examples_to_features(self, tokenizer, examples, label_to_id, max_seq_length,args):
@@ -104,17 +119,15 @@ class ACEProcessor():
             for k in range(context_len):
                 word_know=example.com[k].split(" ")
                 word_know_num=example.com_num[k].split(" ")
-                #word_know_choice=int(example.choice.split(" ")[k][1:-1])
+                word_know_choice=int(example.choice.split(" ")[k][1:-1])
                 word_know_fin="[CLS]"
                 len_word_know=len(word_know)
-                if len_word_know==1:
-                    word_know_rand=0
-                else:
-                    word_know_rand=random.randint(1,len_word_know-1)
-                if len_word_know==1 or word_know_rand==0:
+                if len_word_know==1 or word_know_choice==0 or word_know_choice>=len_word_know:
                     word_know_fin=word_know_fin+" "+word_know[0]
-                else:  
-                    word_know_fin=word_know_fin+" "+word_know[0]+rel_all_B[int(word_know_num[word_know_rand])]+word_know[word_know_rand]+ " [SEP]"
+                else:
+                    #print('\noooo=',word_know_choice)+" [MASK] [MASK] [MASK]"
+                    #word_know_fin=word_know_fin+" "+word_know[0]+rel_all_B[int(word_know_num[o])]+word_know[o]+ " [SEP]"   
+                    word_know_fin=word_know_fin+" "+word_know[0]+rel_all_B[int(word_know_num[word_know_choice])]+word_know[word_know_choice]+ " [SEP]"
                 tokenized_inputs1 = tokenizer(
                     word_know_fin.split(" "), # transformer有Tokenizer 和 TokenizerFast 两类，其中Fast在输入分词好的结果时，会返回一个
                     add_special_tokens=True,
