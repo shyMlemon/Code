@@ -1,8 +1,5 @@
 import sys
-
 sys.path.append("..")
-
-
 import numpy as np
 import sklearn
 import os
@@ -42,7 +39,13 @@ os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
 device = torch.device("cuda:" + str(0) if torch.cuda.is_available() else "cpu")
 # print device
 #device = torch.device("cuda:" + str(args.gpu) if torch.cuda.is_available() else "cpu")
-
+def label_save(sfile,data):
+    try:
+        with open(sfile,'w') as sf:
+            for i in data:
+                sf.write(str(i)+'\n')
+    except:
+        import pdb;pdb.set_trace()
 
 #mycode_start
 def mycollect(batch):
@@ -234,7 +237,7 @@ def train(model):
             optimizer.step()
             scheduler.step()
             if global_step % args.save_step == 0 or ((2*(step+1))%batch_nums == 0 and step+1!=batch_nums):
-                new_eva, ori_eva = dev(model, dev_dataloader, 'dev',
+                new_eva, ori_eva,_ = dev(model, dev_dataloader, 'dev',
                                        str(epoch) + '-' + str(global_step))
                 fitlog.add_loss(total_loss - logging_loss, name='Train_loss', step=global_step)
                 fitlog.add_metric(ori_eva[-1], name="dev_origin F1", step=global_step)
@@ -266,13 +269,16 @@ def train(model):
 
                     save_model(model, optimizer, scheduler, epoch, global_step, 'best')
 
-                    new_eva, ori_eva = dev(model, test_dataloader, 'test',
+                    new_eva, ori_eva,rebut = dev(model, test_dataloader, 'test',
                                            str(epoch) + '-' + str(global_step))
+                    hjskl=args.seed
+                    label_save(f'../data/label/{hjskl}_pt.txt',rebut[1])
+                    label_save(f'../data/label/{hjskl}_gt.txt',rebut[0])
                     fitlog.add_metric(ori_eva[-1], name="test_origin F1", step=global_step)
                     fitlog.add_metric(new_eva[-1], name="test_new F1", step=global_step)
                     best_res = (str(epoch) + '-' + str(global_step), [ori_eva, new_eva])
                 else:
-                    new_eva, ori_eva = dev(model, test_dataloader, 'test',
+                    new_eva, ori_eva,_ = dev(model, test_dataloader, 'test',
                                            str(epoch) + '-' + str(global_step))
                     fitlog.add_metric(ori_eva[-1], name="test_origin F1", step=global_step)
                     fitlog.add_metric(new_eva[-1], name="test_new F1", step=global_step)
@@ -281,7 +287,7 @@ def train(model):
         print('---- train loss:{:.5f}'.format(each_sentences_loss))
         evalLogger.write('---- train loss:{:.5f}\n'.format(each_sentences_loss))
 
-        new_eva, ori_eva = dev(model, dev_dataloader, 'dev',
+        new_eva, ori_eva,_= dev(model, dev_dataloader, 'dev',
                                str(epoch) + '-' + str(global_step))
         if ori_eva[-1] > best_f1 and epoch>5:
 
@@ -310,11 +316,14 @@ def train(model):
 
             save_model(model, optimizer, scheduler, epoch, global_step, 'best')
 
-            new_eva, ori_eva = dev(model, test_dataloader, 'test',
+            new_eva, ori_eva,rebut = dev(model, test_dataloader, 'test',
                                    str(epoch) + '-' + str(global_step))
+            hjskl=args.seed
+            label_save(f'../data/label/{hjskl}_pt.txt',rebut[1])
+            label_save(f'../data/label/{hjskl}_gt.txt',rebut[0])
             best_res = (str(epoch) + '-' + str(global_step), [ori_eva, new_eva])
         else:
-            new_eva, ori_eva = dev(model, test_dataloader, 'test',
+            new_eva, ori_eva,_ = dev(model, test_dataloader, 'test',
                                    str(epoch) + '-' + str(global_step))
         # save epoch model
         save_model(model, optimizer, scheduler, epoch)
@@ -389,9 +398,11 @@ def dev(model, dataloader, prefix='', suffix=''):
     print('pt_labels', len(total_pt_labels))
     assert len(total_pt_labels) == len(total_gt_labels)
     assert len(total_pt_labels) == len(total_merge_index)
-
+ 
     new_p, new_r, new_f1 = evaluate_score(total_gt_labels, total_pt_labels, prefix='bpe_labels')
-
+    # hjskl=args.seed
+    # label_save(f'../data/label/{hjskl}_pt.txt',total_pt_labels)
+    # label_save(f'../data/label/{hjskl}_gt.txt',total_gt_labels)
     ori_gt_labels, ori_pt_labels = merge_strategy(total_gt_labels, total_pt_labels, total_merge_index)
     # logger.debug('Reconstruct ori_label success!')
     # print('Reconstruct ori_label success!')
@@ -401,7 +412,7 @@ def dev(model, dataloader, prefix='', suffix=''):
     print(prefix + ' loss:{:.5f}'.format(each_sentences_loss))
     evalLogger.write('---- {} loss:{:.5f}\n'.format(prefix, each_sentences_loss))
 
-    return [[new_p, new_r, new_f1], [ori_p, ori_r, ori_f1]]
+    return [[new_p, new_r, new_f1], [ori_p, ori_r, ori_f1],[total_gt_labels,total_pt_labels]]
 
 
 def merge_strategy(gt_labels, pt_labels, merge_index):
@@ -487,7 +498,7 @@ def select_tokenizer(args):
     elif "roberta" in args.pretrain_model_name:
         return RobertaTokenizer.from_pretrained(args.pretrain_model_name)
     elif "bert" in args.pretrain_model_name:
-        return BertTokenizerFast.from_pretrained(args.pretrain_model_name)
+        return BertTokenizerFast.from_pretrained('/home/syang/PLMs/bert-large-cased')
     elif "xlnet" in args.pretrain_model_name:
         return XLNetTokenizer.from_pretrained(args.pretrain_model_name)
 
@@ -501,7 +512,7 @@ def main():
     checkpoint_dir = args.base_dir + "/checkpoint-" + str(args.checkpoint) + '-' + str(args.cur_batch)
     # print('check_point_dir',checkpoint_dir)
     model = myBert.from_pretrained( \
-        args.pretrain_model_name if not args.load_checkpoint else checkpoint_dir, \
+        '/home/syang/PLMs/bert-large-cased', \
         num_labels=args.event_nums).to(device)
     # print(dir(model))
     if args.do_train:
